@@ -5,6 +5,7 @@ CLANG=clang-6.0
 MUSL=musl-1.1.19
 ZLIB=zlib-1.2.11
 LIBARCHIVE=libarchive-3.3.2
+BZIP2=bzip2-1.0.6
 TOYBOX=toybox-0.7.6
 MKSH=mksh-R56c
 
@@ -24,6 +25,8 @@ ZLIB_FILE=$ZLIB.tar.gz
 ZLIB_HOST="https://zlib.net"
 LIBARCHIVE_FILE=$LIBARCHIVE.tar.gz
 LIBARCHIVE_HOST="https://www.libarchive.org/downloads"
+BZIP2_FILE=$BZIP2.tar.gz
+BZIP2_HOST="http://www.bzip.org/1.0.6"
 TOYBOX_FILE=$TOYBOX.tar.gz
 TOYBOX_HOST="https://landley.net/toybox/downloads"
 MKSH_FILE=$MKSH.tgz
@@ -82,12 +85,24 @@ function libarchive {
     $GETSRC src/$LIBARCHIVE_FILE $LIBARCHIVE_HOST/$LIBARCHIVE_FILE
   fi
 
-
   $TAR -xf src/$LIBARCHIVE_FILE -C work
   mkdir work/build-$LIBARCHIVE
   sh -c "cd work/build-$LIBARCHIVE; CC=$PWD/rootfs/usr/bin/musl-clang-x ../$LIBARCHIVE/configure --prefix=$PWD/rootfs/usr --without-xml2"
   make -j4 -C work/build-$LIBARCHIVE
   make -C work/build-$LIBARCHIVE install
+}
+
+function bzip2 {
+  echo "---------------------------------------: libarchive"
+  if [ ! -f src/$BZIP2_FILE ]; then
+    $GETSRC src/$BZIP2_FILE $BZIP2_HOST/$BZIP2_FILE
+  fi
+
+  $TAR -xf src/$BZIP2_FILE -C work
+  sed -i "s/CC=gcc/CC?=gcc/" work/$BZIP2/Makefile
+  sed -i "s@PREFIX=/usr/local@PREFIX?=/usr/local@" work/$BZIP2/Makefile
+
+  sh -c "cd work/$BZIP2; CC=$PWD/rootfs/usr/bin/musl-clang-x PREFIX=$PWD/rootfs/usr make all install"
 }
 
 function toybox {
@@ -142,6 +157,7 @@ case $1 in
   all)
     musl
     zlib
+    bzip2
     libarchive
     toybox
     mksh
