@@ -45,9 +45,21 @@ function musl {
 
   $TAR -xf src/$MUSL_FILE -C work
   mkdir work/build-$MUSL
-  sh -c "cd work/build-$MUSL; CC=$CLANG ../$MUSL/configure --prefix=$PWD/rootfs/usr"
+  sh -c "cd work/build-$MUSL; CC=$CLANG ../$MUSL/configure --prefix=/usr"
   make -j 4 -C work/build-$MUSL
-  make -C work/build-$MUSL install
+  DESTDIR=$PWD/rootfs make -C work/build-$MUSL install
+
+  # Setup cross compile linker helper
+  cp rootfs/usr/bin/ld.musl-clang rootfs/usr/bin/ld.musl-clang-x
+  sed -i "s?libc_lib=\"/usr/lib\"?libc_lib=\"$PWD/rootfs/usr/lib\"?" rootfs/usr/bin/ld.musl-clang-x
+  chmod a+x rootfs/usr/bin/ld.musl-clang-x
+
+  # Setup cross compile helper
+  cp -P rootfs/usr/bin/musl-clang rootfs/usr/bin/musl-clang-x
+  sed -i "s?libc=\"/usr\"?libc=\"$PWD/rootfs/usr\"?" rootfs/usr/bin/musl-clang-x
+  sed -i "s?libc_lib=\"/usr/lib\"?libc_lib=\"$PWD/rootfs/usr/lib\"?" rootfs/usr/bin/musl-clang-x
+  sed -i "s?libc_inc=\"/usr/include\"?libc_inc=\"$PWD/rootfs/usr/include\"?" rootfs/usr/bin/musl-clang-x
+  chmod a+x rootfs/usr/bin/musl-clang-x
 }
 
 function zlib {
@@ -59,7 +71,7 @@ function zlib {
   $TAR -xf src/$ZLIB_FILE -C work
   mkdir work/build-$ZLIB
 
-  sh -c "cd work/build-$ZLIB; CC=$PWD/rootfs/usr/bin/musl-clang ../$ZLIB/configure --prefix=$PWD/rootfs/usr"
+  sh -c "cd work/build-$ZLIB; CC=$PWD/rootfs/usr/bin/musl-clang-x ../$ZLIB/configure --prefix=$PWD/rootfs/usr"
   make -j 4 -C work/build-$ZLIB
   make -C work/build-$ZLIB install
 }
@@ -73,7 +85,7 @@ function libarchive {
 
   $TAR -xf src/$LIBARCHIVE_FILE -C work
   mkdir work/build-$LIBARCHIVE
-  sh -c "cd work/build-$LIBARCHIVE; CC=$PWD/rootfs/usr/bin/musl-clang ../$LIBARCHIVE/configure --prefix=$PWD/rootfs/usr --without-xml2"
+  sh -c "cd work/build-$LIBARCHIVE; CC=$PWD/rootfs/usr/bin/musl-clang-x ../$LIBARCHIVE/configure --prefix=$PWD/rootfs/usr --without-xml2"
   make -j4 -C work/build-$LIBARCHIVE
   make -C work/build-$LIBARCHIVE install
 }
