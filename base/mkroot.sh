@@ -1,6 +1,7 @@
 #/bin/sh
 
 CLANG=clang-6.0
+TARGET=x86_64-linux-musl
 
 MUSL=musl-1.1.19
 ZLIB=zlib-1.2.11
@@ -8,13 +9,15 @@ LIBARCHIVE=libarchive-3.3.2
 BZIP2=bzip2-1.0.6
 TOYBOX=toybox-0.7.6
 MKSH=mksh-R56c
+PERL=perl-5.26.2
+PERL_CROSS=perl-cross-1.1.9
 
 
 
 # Generally shouldn't have to change the following
 TAR=`which bsdtar`
 GETSRC=`which curl` 
-GETSRC="$GETSRC -o"
+GETSRC="$GETSRC -L -o"
 GIT=`which git`
 PWD=`pwd`
 
@@ -31,6 +34,10 @@ TOYBOX_FILE=$TOYBOX.tar.gz
 TOYBOX_HOST="https://landley.net/toybox/downloads"
 MKSH_FILE=$MKSH.tgz
 MKSH_HOST="http://www.mirbsd.org/MirOS/dist/mir/mksh"
+PERL_FILE=$PERL.tar.gz
+PERL_HOST="https://www.cpan.org/src/5.0"
+PERL_CROSS_FILE=$PERL_CROSS.tar.gz
+PERL_CROSS_HOST="https://github.com/arsv/perl-cross/releases/download/1.1.9"
 
 mkdir -p work
 mkdir -p src
@@ -127,7 +134,7 @@ function mksh {
     $GETSRC src/$MKSH_FILE $MKSH_HOST/$MKSH_FILE
   fi
 
-  $TAR -xvf src/$MKSH_FILE -C work
+  $TAR -xf src/$MKSH_FILE -C work
   
   CFLAGS="-static --sysroot=$PWD/rootfs -I/usr/include"
 
@@ -140,6 +147,27 @@ function mksh {
   cd ..
   CFLAGS=""
 }
+
+function perl {
+  echo "---------------------------------------: perl"
+  if [ ! -f src/$PERL_FILE ]; then
+    $GETSRC src/$PERL_FILE $PERL_HOST/$PERL_FILE
+  fi
+
+  if [ ! -f src/$PERL_CROSS_FILE ]; then
+    $GETSRC src/$PERL_CROSS_FILE $PERL_CROSS_HOST/$PERL_CROSS_FILE
+  fi
+
+  $TAR -xf src/$PERL_FILE -C work
+  $TAR -xf src/$PERL_CROSS_FILE -C work/$PERL --strip 1
+
+  #sh -c "cd work/$PERL; CC=$PWD/rootfs/usr/bin/musl-clang-x CFLAGS=\"-I $PWD/rootfs/usr/include\" ../$PERL/configure --target=$TARGET --sysroot=$PWD/rootfs --with-ranlib=llvm-ranlib --with-ar=llvm-ar --with-objdump=llvm-objdump --host-cc=clang --host-ranlib=llvm-ranlib --host-ar=llvm-ar --host-objdump=llvm-objdump"
+  sh -c "cd work/$PERL; ../$PERL/configure --target=$TARGET --with-cc=musl-clang --with-ranlib=llvm-ranlib --with-ar=llvm-ar --with-objdump=llvm-objdump"
+
+  make -C work/$PERL
+  make -C work/$PERL DESTDIR=$PWD/rootfs/opt install 
+}
+
 
 function clean {
   rm -rf work
