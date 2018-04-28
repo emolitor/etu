@@ -148,6 +148,8 @@ sh -c "cd build-stage-llvm; cmake \
 	-DLLVM_DEFAULT_TARGET_TRIPLE=$TARGET \
 	-DLLVM_TARGET_ARCH=X86 \
 	-DLLVM_TARGETS_TO_BUILD=X86 \
+	-DLLVM_ENABLE_EH=True \
+	-DLLVM_ENABLE_RTTI=True \
 	-DLLVM_ENABLE_LIBCXX=True \
 	-DLLVM_ENABLE_LIBXML2=False \
 	-DCOMPILER_RT_BUILD_BUILTINS=True \
@@ -159,6 +161,7 @@ sh -c "cd build-stage-llvm; cmake \
 	-DLIBCXXABI_ENABLE_STATIC_UNWINDER=True \
 	-DLIBCXX_HAS_MUSL_LIBC=True \
 	-DLIBCXX_HAS_GCC_S_LIB=False \
+	-DCLANG_TOOL_C_INDEX_TEST_BUILD=False \
 	$PWD/src/$LLVM"
 
 make -j12 -C build-stage-llvm
