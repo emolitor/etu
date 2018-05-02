@@ -32,7 +32,7 @@ LLD=lld-$LLVM_VERSION
 LLD_FILE=$LLD.src.tar.xz
 
 
-function init {
+init() {
   mkdir -p src
 
   if [ ! -d src/$LLVM ]; then
@@ -62,7 +62,7 @@ function init {
 }
 
 
-function musl {
+musl() {
   init 
 
   if [ ! -d src/$MUSL ]; then
@@ -86,7 +86,7 @@ function musl {
 }
 
 
-function libxml2 {
+libxml2() {
   init 
 
   if [ ! -d src/$LIBXML2 ]; then
@@ -106,7 +106,7 @@ function libxml2 {
 }
 
 
-function libcxx {
+libcxx() {
   init 
 
   if [ ! -d src/$LIBUNWIND ]; then
@@ -193,7 +193,7 @@ function libcxx {
 }
 
 
-function clang {
+clang() {
   init
 
   mkdir build-host-clang
@@ -251,7 +251,7 @@ function clang {
 }
 
 
-function clean {
+clean() {
   rm -rf $PWD/build-prestage-*
   rm -rf $PWD/stage
   rm -rf $PWD/build-stage-*
@@ -260,13 +260,13 @@ function clean {
 }
 
 
-function distclean {
+distclean() {
   rm -rf src
   clean
 }
 
 
-function all {
+all() {
   musl
   libxml2
   libcxx
