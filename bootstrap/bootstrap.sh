@@ -33,9 +33,12 @@ LLD_FILE=$LLD.src.tar.xz
 
 
 init() {
-  mkdir -p src
 
-  if [ ! -d src/$LLVM ]; then
+  if [ ! -d $PWD/src ]; then
+    mkdir -p $PWD/src
+
+    sh -c "cd src; curl -L -O $MUSL_URL/$MUSL_FILE"
+    sh -c "cd src; curl -L -O $LIBXML2_URL/$LIBXML2_FILE"
     sh -c "cd src; curl -L -O $LLVM_URL/$LLVM_FILE"
     sh -c "cd src; curl -L -O $LLVM_URL/$LIBUNWIND_FILE"
     sh -c "cd src; curl -L -O $LLVM_URL/$LIBCXXABI_FILE"
@@ -43,6 +46,9 @@ init() {
     sh -c "cd src; curl -L -O $LLVM_URL/$COMPILER_RT_FILE"
     sh -c "cd src; curl -L -O $LLVM_URL/$CFE_FILE"
     sh -c "cd src; curl -L -O $LLVM_URL/$LLD_FILE"
+
+    sh -c "cd src; bsdtar -xf $MUSL_FILE"
+    sh -c "cd src; bsdtar -xf $LIBXML2_FILE"
 
     mkdir -p src/$LLVM
     bsdtar -xf src/$LLVM_FILE -C src/$LLVM --strip 1
@@ -65,23 +71,12 @@ init() {
 musl() {
   init 
 
-  if [ ! -d src/$MUSL ]; then
-    sh -c "cd src; curl -L -O $MUSL_URL/$MUSL_FILE"
-    sh -c "cd src; bsdtar -xf $MUSL_FILE"
-  fi
-
-  mkdir -p build-host-musl
-  sh -c "cd build-host-musl; CC=clang \
-	$PWD/src/$MUSL/configure \
-	--prefix=$PWD/host"
-  make -j12 -C build-host-musl
-  make -C build-host-musl install 
-
   mkdir -p build-stage-musl
-  sh -c "cd build-stage-musl; CC=clang \
+  sh -c "cd build-stage-musl; \
+	CC=clang \
 	$PWD/src/$MUSL/configure \
-	--prefix=/usr"
-  make -j12 -C build-stage-musl
+	--prefix=/"
+  make -j8 -C build-stage-musl
   DESTDIR=$PWD/stage make -C build-stage-musl install 
 }
 
@@ -89,19 +84,16 @@ musl() {
 libxml2() {
   init 
 
-  if [ ! -d src/$LIBXML2 ]; then
-    sh -c "cd src; curl -L -O $LIBXML2_URL/$LIBXML2_FILE"
-    sh -c "cd src; bsdtar -xf $LIBXML2_FILE"
-  fi
-
   mkdir -p build-stage-libxml2
-  sh -c "cd build-stage-libxml2; CC=$PWD/host/bin/musl-clang \
+  sh -c "cd build-stage-libxml2; \
+	CC=clang \
+	CFLAGS=\"-static --target=$TARGET --sysroot=$PWD/stage\" \
 	$PWD/src/$LIBXML2/configure \
 	--without-zlib \
 	--without-lzma \
 	--without-python \
-	--prefix=$PWD/stage/usr"
-  make -j4 -C build-stage-libxml2
+	--prefix=$PWD/stage"
+  make -j8 -C build-stage-libxml2
   make -C build-stage-libxml2 install
 }
 
@@ -109,89 +101,81 @@ libxml2() {
 libcxx() {
   init 
 
-  if [ ! -d src/$LIBUNWIND ]; then
-    mkdir src/$LIBUNWIND
-    bsdtar -xf src/$LIBUNWIND_FILE -C src/$LIBUNWIND --strip 1
-    mkdir src/$LIBCXXABI
-    bsdtar -xf src/$LIBCXXABI_FILE -C src/$LIBCXXABI --strip 1
-    mkdir src/$LIBCXX
-    bsdtar -xf src/$LIBCXX_FILE -C src/$LIBCXX --strip 1
-  fi
-
-  mkdir build-stage-libunwind
-  sh -c "cd build-stage-libunwind; cmake \
-	-DCMAKE_BUILD_TYPE=Release \
-	-DCMAKE_INSTALL_PREFIX=$PWD/stage/usr \
-	-DCMAKE_C_COMPILER=$PWD/host/bin/musl-clang \
-	-DCMAKE_CXX_COMPILER=clang++ \
-	-DLLVM_PATH=$PWD/src/$LLVM \
-	$PWD/src/$LIBUNWIND"
-
-  make -j4 -C build-stage-libunwind
-  make -C build-stage-libunwind install
-
-  mkdir build-stage-libcxxabi
-  sh -c "cd build-stage-libcxxabi; cmake \
-	-DCMAKE_BUILD_TYPE=Release \
-	-DCMAKE_INSTALL_PREFIX=$PWD/stage/usr \
-	-DCMAKE_C_COMPILER=$PWD/host/bin/musl-clang \
-	-DCMAKE_CXX_COMPILER=clang++ \
-        -DCMAKE_SHARED_LINKER_FLAGS=-L$PWD/stage/usr/lib \
-	-DLIBCXXABI_USE_LLVM_UNWINDER=True \
-	-DLIBCXXABI_LIBUNWIND_PATH=$PWD/src/$LIBUNWIND \
-	-DLIBCXXABI_LIBCXX_INCLUDES=$PWD/src/$LIBCXX/include \
-	-DLLVM_PATH=$PWD/src/$LLVM \
-	$PWD/src/$LIBCXXABI"
-
-  make -j4 -C build-stage-libcxxabi
-  make -C build-stage-libcxxabi install
-
-  # Build libcxx against libstdc++
-  mkdir build-prestage-libcxx
-  sh -c "cd build-prestage-libcxx; cmake \
-	-DCMAKE_BUILD_TYPE=Release \
-	-DCMAKE_INSTALL_PREFIX=$PWD/stage/usr \
-	-DCMAKE_C_COMPILER=$PWD/host/bin/musl-clang \
-	-DCMAKE_CXX_COMPILER=clang++ \
-        -DCMAKE_SHARED_LINKER_FLAGS=-L$PWD/stage/usr/lib \
-	-DLIBCXX_CXX_ABI=libcxxabi \
-	-DLIBCXX_CXX_ABI_INCLUDE_PATHS=$PWD/src/$LIBCXXABI/include \
-	-DLIBCXX_CXX_ABI_LIBRARY_PATH=$PWD/stage/usr/local \
-	-DLLVM_PATH=$PWD/src/$LLVM \
-	$PWD/src/$LIBCXX"
-
-  make -j4 -C build-prestage-libcxx
-
-  # Build libcxx against libcxx compiled above
   mkdir build-stage-libcxx
   sh -c "cd build-stage-libcxx; cmake \
 	-DCMAKE_BUILD_TYPE=Release \
-	-DCMAKE_INSTALL_PREFIX=$PWD/stage/usr \
+	-DCMAKE_INSTALL_PREFIX=$PWD/stage \
 	-DCMAKE_C_COMPILER=clang \
 	-DCMAKE_CXX_COMPILER=clang++ \
 	-DCMAKE_C_FLAGS=\"--sysroot=$PWD/stage --target=$TARGET \" \
-	-DCMAKE_CXX_FLAGS=\" \
-		--sysroot=$PWD/stage \
-		--target=$TARGET \
-		-I$PWD/build-prestage-libcxx/include \" \
-        -DCMAKE_EXE_LINKER_FLAGS=\" \
-		-L$PWD/stage/usr/lib \
-		-L$PWD/build-prestage-libcxx/lib \" \
-        -DCMAKE_SHARED_LINKER_FLAGS=\" \
-  		-L$PWD/stage/usr/lib  \
-		-L$PWD/build-prestage-libcxx/lib \" \
+	-DCMAKE_CXX_FLAGS=\"--sysroot=$PWD/stage --target=$TARGET -I$PWD/src/$LLVM/projects/libcxx/include\" \
+	-DLIBXML2_INCLUDE_DIR=$PWD/stage/include/libxml2 \
+	-DLIBXML2_LIBRARY=$PWD/stage/usr/libxml2.so \
+	-DLIBXML2_XMLLINT_EXECUTABLE=$PWD/stage/bin/xmllint \
+	-DLLVM_DEFAULT_TARGET_TRIPLE=$TARGET \
+	-DLLVM_TARGET_ARCH=X86 \
+	-DLLVM_TARGETS_TO_BUILD=X86 \
+	-DLLVM_ENABLE_EH=True \
+	-DLLVM_ENABLE_RTTI=True \
+	-DLLVM_ENABLE_LIBXML2=True \
+	-DLLVM_TOOL_LTO_BUILD=False \
+	-DLIBUNWIND_USE_COMPILER_RT=True \
+	-DCOMPILER_RT_BUILD_BUILTINS=True \
+	-DCOMPILER_RT_BUILD_SANITIZERS=False \
+	-DCOMPILER_RT_BUILD_XRAY=False \
+	-DCOMPILER_RT_BUILD_LIBFUZZER=False \
+	-DCOMPILER_RT_BUILD_PROFILE=False \
+	-DLIBCXXABI_USE_COMPILER_RT=True \
+	-DLIBCXXABI_USE_LLVM_UNWINDER=True \
 	-DLIBCXX_CXX_ABI=libcxxabi \
-	-DLIBCXX_CXX_ABI_INCLUDE_PATHS=$PWD/src/$LIBCXXABI/include \
-	-DLIBCXX_CXX_ABI_LIBRARY_PATH=$PWD/stage/usr/local \
+	-DLIBCXX_CXX_ABI_INCLUDE_PATHS=$PWD/src/$LLVM/projects/libcxxabi/include \
+	-DLIBCXX_CXX_ABI_LIBRARY_PATH=$PWD/build-stage-llvm/lib \
 	-DLIBCXX_HAS_MUSL_LIBC=True \
-	-DLIBCXX_HAS_GCC_S_LIB=False \
-	-DLLVM_PATH=$PWD/src/$LLVM \
-	$PWD/src/$LIBCXX"
+	-DLIBCXX_USE_COMPILER_RT=True \
+	$PWD/src/$LLVM"
 
-  make -j4 -C build-stage-libcxx
-  make -C build-stage-libcxx install
+  make -j8 -C build-stage-libcxx unwind cxxabi cxx
+  make -C build-stage-libcxx install-unwind install-cxxabi install-cxx
 }
 
+llvm() {
+  init
+
+#	-DCMAKE_CXX_FLAGS=\"--sysroot=$PWD/stage --target=$TARGET -D_GLIBCXX_OS_DEFINES=1 \" \
+
+  mkdir build-stage-llvm
+  sh -c "cd build-stage-llvm; cmake -GNinja \
+	-DCMAKE_BUILD_TYPE=Release \
+	-DCMAKE_INSTALL_PREFIX=$PWD/stage \
+	-DCMAKE_C_COMPILER=clang \
+	-DCMAKE_CXX_COMPILER=clang++ \
+	-DCMAKE_C_FLAGS=\"--sysroot=$PWD/stage --target=$TARGET \" \
+	-DCMAKE_CXX_FLAGS=\"--sysroot=$PWD/stage --target=$TARGET -I$PWD/src/$LLVM/projects/libcxx/include\" \
+	-DLIBXML2_INCLUDE_DIR=$PWD/stage/include/libxml2 \
+	-DLIBXML2_LIBRARY=$PWD/stage/usr/libxml2.so \
+	-DLIBXML2_XMLLINT_EXECUTABLE=$PWD/stage/bin/xmllint \
+	-DLLVM_DEFAULT_TARGET_TRIPLE=$TARGET \
+	-DLLVM_TARGET_ARCH=X86 \
+	-DLLVM_TARGETS_TO_BUILD=X86 \
+	-DLLVM_ENABLE_EH=True \
+	-DLLVM_ENABLE_RTTI=True \
+	-DLLVM_ENABLE_LIBXML2=True \
+	-DLLVM_TOOL_LTO_BUILD=False \
+	-DLIBUNWIND_USE_COMPILER_RT=True \
+	-DCOMPILER_RT_BUILD_BUILTINS=True \
+	-DCOMPILER_RT_BUILD_SANITIZERS=False \
+	-DCOMPILER_RT_BUILD_XRAY=False \
+	-DCOMPILER_RT_BUILD_LIBFUZZER=False \
+	-DCOMPILER_RT_BUILD_PROFILE=False \
+	-DLIBCXXABI_USE_COMPILER_RT=True \
+	-DLIBCXXABI_USE_LLVM_UNWINDER=True \
+	-DLIBCXX_CXX_ABI=libcxxabi \
+	-DLIBCXX_CXX_ABI_INCLUDE_PATHS=$PWD/src/$LLVM/projects/libcxxabi/include \
+	-DLIBCXX_CXX_ABI_LIBRARY_PATH=$PWD/build-stage-llvm/lib \
+	-DLIBCXX_HAS_MUSL_LIBC=True \
+	-DLIBCXX_USE_COMPILER_RT=True \
+	$PWD/src/$LLVM"
+}
 
 clang() {
   init
@@ -235,6 +219,7 @@ clang() {
 	-DCOMPILER_RT_BUILD_XRAY=False \
 	-DCOMPILER_RT_BUILD_LIBFUZZER=False \
 	-DCOMPILER_RT_BUILD_PROFILE=False \
+	-DCOMPILER_RT_DEFAULT_TARGET_ONLY=True \
 	-DLIBCXXABI_USE_COMPILER_RT=True \
 	-DLIBCXXABI_USE_LLVM_UNWINDER=True \
 	-DLIBCXXABI_ENABLE_STATIC_UNWINDER=True \
