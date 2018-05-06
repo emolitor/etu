@@ -46,7 +46,8 @@ init() {
     sh -c "cd src; git clone https://github.com/richfelker/musl-cross-make"
     echo "TARGET=x86_64-linux-musl" > $PWD/src/musl-cross-make/config.mak
     echo "OUTPUT=$PWD/host" >> $PWD/src/musl-cross-make/config.mak
-    echo "COMMON_CONFIG+=CFLAGS=\"-g0 -Os\" CXXFLAGS=\"-g0 -Os\" LDFLAGS=\"-s\"" >> $PWD/src/musl-cross-make/config.mak
+    echo "DL_CMD=curl -C - -L -o" >> $PWD/src/musl-cross-make/config.mak
+    echo "COMMON_CONFIG+=CFLAGS=\"-Os\" CXXFLAGS=\"-Os\" LDFLAGS=\"-s\"" >> $PWD/src/musl-cross-make/config.mak
 
     sh -c "cd src; curl -L -O $MUSL_URL/$MUSL_FILE"
 #    sh -c "cd src; curl -L -O $LIBICU_URL/$LIBICU_FILE"
