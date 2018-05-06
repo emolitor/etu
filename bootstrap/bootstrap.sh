@@ -92,8 +92,10 @@ init() {
 
 
 host_gcc() {
-    make -j12 -C $PWD/src/musl-cross-make
-    make -C $PWD/src/musl-cross-make install
+  init
+
+  make -j12 -C $PWD/src/musl-cross-make
+  make -C $PWD/src/musl-cross-make install
 }
 
 
