@@ -1,6 +1,7 @@
 #!/bin/sh
 
 MUSL_VERSION=1.1.19
+LIBICU_VERSION=61.1
 LIBXML2_VERSION=2.9.8
 LLVM_VERSION=6.0.0
 
@@ -10,6 +11,11 @@ TARGET=x86_64-pc-linux-musl
 MUSL=musl-$MUSL_VERSION
 MUSL_FILE=$MUSL.tar.gz
 MUSL_URL=https://www.musl-libc.org/releases/
+
+
+LIBICU=icu4c-`echo $LIBICU_VERSION | sed 's/\./_/'`
+LIBICU_FILE=$LIBICU-src.tgz
+LIBICU_URL=http://download.icu-project.org/files/icu4c/$LIBICU_VERSION
 
 LIBXML2=libxml2-$LIBXML2_VERSION
 LIBXML2_FILE=$LIBXML2.tar.gz
@@ -38,6 +44,7 @@ init() {
     mkdir -p $PWD/src
 
     sh -c "cd src; curl -L -O $MUSL_URL/$MUSL_FILE"
+    sh -c "cd src; curl -L -O $LIBICU_URL/$LIBICU_FILE"
     sh -c "cd src; curl -L -O $LIBXML2_URL/$LIBXML2_FILE"
     sh -c "cd src; curl -L -O $LLVM_URL/$LLVM_FILE"
     sh -c "cd src; curl -L -O $LLVM_URL/$LIBUNWIND_FILE"
@@ -48,6 +55,10 @@ init() {
     sh -c "cd src; curl -L -O $LLVM_URL/$LLD_FILE"
 
     sh -c "cd src; bsdtar -xf $MUSL_FILE"
+
+    mkdir -p src/$LIBICU
+    bsdtar -xf src/$LIBICU_FILE -C src/$LIBICU --strip 1
+
     sh -c "cd src; bsdtar -xf $LIBXML2_FILE"
 
     mkdir -p src/$LLVM
@@ -67,34 +78,28 @@ init() {
   fi
 }
 
+#	-DCMAKE_CXX_FLAGS=\"--target=$TARGET -I$PWD/src/$LLVM/projects/libcxx/include\" \
 
-musl() {
+sysroot() {
   init 
 
-  mkdir -p build-stage-musl
-  sh -c "cd build-stage-musl; \
+  mkdir -p build-sysroot-musl
+  sh -c "cd build-sysroot-musl; \
 	CC=clang \
 	$PWD/src/$MUSL/configure \
 	--prefix=/"
-  make -j8 -C build-stage-musl
-  DESTDIR=$PWD/stage make -C build-stage-musl install 
-}
+  make -j8 -C build-sysroot-musl
+  DESTDIR=$PWD/sysroot make -C build-sysroot-musl install 
 
-
-libcxx() {
-  init 
-
-  mkdir build-stage-libcxx
-  sh -c "cd build-stage-libcxx; cmake \
+  mkdir build-sysroot-libcxx
+  sh -c "cd build-sysroot-libcxx; cmake \
 	-DCMAKE_BUILD_TYPE=Release \
-	-DCMAKE_INSTALL_PREFIX=$PWD/stage \
+	-DCMAKE_INSTALL_PREFIX=$PWD/sysroot \
 	-DCMAKE_C_COMPILER=clang \
 	-DCMAKE_CXX_COMPILER=clang++ \
-	-DCMAKE_C_FLAGS=\"--sysroot=$PWD/stage --target=$TARGET \" \
-	-DCMAKE_CXX_FLAGS=\"--sysroot=$PWD/stage --target=$TARGET -I$PWD/src/$LLVM/projects/libcxx/include\" \
-	-DLLVM_DEFAULT_TARGET_TRIPLE=$TARGET \
-	-DLLVM_TARGET_ARCH=X86 \
-	-DLLVM_TARGETS_TO_BUILD=X86 \
+	-DCMAKE_C_FLAGS=\"--target=$TARGET \" \
+	-DCMAKE_CXX_FLAGS=\"--target=$TARGET -I$PWD/src/$LLVM/projects/libcxx/include\" \
+	-DCMAKE_SYSROOT=$PWD/sysroot \
 	-DLIBCXXABI_USE_LLVM_UNWINDER=True \
 	-DLIBCXX_CXX_ABI=libcxxabi \
 	-DLIBCXX_CXX_ABI_INCLUDE_PATHS=$PWD/src/$LLVM/projects/libcxxabi/include \
@@ -102,32 +107,53 @@ libcxx() {
 	-DLIBCXX_HAS_GCC_S_LIB=False \
 	$PWD/src/$LLVM"
 
-  make -j8 -C build-stage-libcxx unwind cxxabi
-  make -C build-stage-libcxx install-unwind install-cxxabi
-  make -j8 -C build-stage-libcxx cxx
-  make -C build-stage-libcxx install-cxx
+  make -j8 -C build-sysroot-libcxx unwind install-unwind
+  make -j8 -C build-sysroot-libcxx cxxabi install-cxxabi
+  make -j8 -C build-sysroot-libcxx cxx install-cxx
 }
+
+
+host() {
+  init
+  
+  mkdir build-host-clang
+  sh -c "cd build-host-clang; cmake -GNinja \
+	-DCMAKE_BUILD_TYPE=Release \
+	-DCMAKE_INSTALL_PREFIX=$PWD/host \
+	-DCMAKE_C_COMPILER=clang \
+	-DCMAKE_CXX_COMPILER=clang++ \
+	-DDEFAULT_SYSROOT=$PWD/sysroot \
+	-DCLANG_DEFAULT_CXX_STDLIB=libc++ \
+	-DCLANG_DEFAULT_LINKER=lld \
+	-DCLANG_DEFAULT_RTLIB=compiler-rt \
+	-DLLVM_DEFAULT_TARGET_TRIPLE=$TARGET \
+	-DLLVM_ENABLE_LLD=True \
+	$PWD/src/$LLVM"
+}
+
 
 libxml2() {
   init 
 
-  mkdir -p build-stage-libxml2
-  sh -c "cd build-stage-libxml2; \
+  mkdir -p build-sysroot-libxml2
+  sh -c "cd build-sysroot-libxml2; \
 	CC=clang \
-	CFLAGS=\"-static --target=$TARGET --sysroot=$PWD/stage\" \
+	CFLAGS=\"-static --target=$TARGET --sysroot=$PWD/sysroot \" \
 	$PWD/src/$LIBXML2/configure \
 	--without-zlib \
 	--without-lzma \
 	--without-python \
-	--prefix=$PWD/stage"
-  make -j8 -C build-stage-libxml2
-  make -C build-stage-libxml2 install
+	--prefix=$PWD/sysroot"
+  make -j8 -C build-sysroot-libxml2
+  make -C build-sysroot-libxml2 install
 }
 
 
 clean() {
-  rm -rf $PWD/stage
-  rm -rf $PWD/build-stage-*
+  rm -rf $PWD/sysroot
+  rm -rf $PWD/build-sysroot-*
+  rm -rf $PWD/host
+  rm -rf $PWD/build-host-*
 }
 
 
