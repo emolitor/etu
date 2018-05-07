@@ -93,91 +93,88 @@ init() {
 
 
 host_gcc() {
-  init
+  init 
 
   make -j12 -C $PWD/src/musl-cross-make
   make -C $PWD/src/musl-cross-make install
 }
 
 
-sysroot() {
-  init 
-
-#  mkdir -p build-sysroot-musl
-#  sh -c "cd build-sysroot-musl; \
-#	CC=clang \
-#	$PWD/src/$MUSL/configure \
-#	--prefix=/"
-#  make -j8 -C build-sysroot-musl
-#  DESTDIR=$PWD/sysroot make -C build-sysroot-musl install 
-#	CC=clang CFLAGS=\"--sysroot=$PWD/sysroot\" \
-#	CXX=clang++ \
-#	cmake \
-
-  mkdir build-sysroot-libunwind
-  sh -c "cd build-sysroot-libunwind; cmake \
-	-DCMAKE_BUILD_TYPE=Release \
-	-DCMAKE_INSTALL_PREFIX=$PWD/sysroot \
-	-DCMAKE_C_COMPILER=clang \
-	-DCMAKE_C_FLAGS=--sysroot=$PWD/sysroot \
-	-DCMAKE_CXX_COMPILER=clang++ \
-	-DCMAKE_INSTALL_PREFIX=$PWD/sysroot \
-	-DLLVM_PATH=$PWD/src/$LLVM \
-	$PWD/src/$LIBUNWIND"
-
-#	-DLIBUNWIND_ENABLE_SHARED=False \
-
-  make -j8 -C build-sysroot-libunwind unwind 
-
-  mkdir build-sysroot-libcxxabi
-  sh -c "cd build-sysroot-libcxxabi; cmake \
-	-DCMAKE_BUILD_TYPE=Release \
-	-DCMAKE_INSTALL_PREFIX=$PWD/sysroot \
-	-DCMAKE_C_COMPILER=clang \
-	-DCMAKE_C_FLAGS=--sysroot=$PWD/sysroot \
-	-DCMAKE_CXX_COMPILER=clang++ \
-	-DCMAKE_SHARED_LINKER_FLAGS=\"-L$PWD/sysroot/lib -L$PWD/build-sysroot-libunwind/lib\" \
-	-DLIBCXXABI_USE_LLVM_UNWINDER=True \
-	-DLIBCXXABI_ENABLE_STATIC_UNWINDER=True \
-	-DLIBCXXABI_LIBUNWIND_PATH=$PWD/src/$LIBUNWIND \
-	-DLIBCXXABI_LIBCXX_INCLUDES=$PWD/src/$LIBCXX/include \
-	$PWD/src/$LIBCXXABI"
-  make -j8 -C build-sysroot-libcxx cxxabi 
-
-  mkdir build-sysroot-libcxx
-  sh -c "cd build-sysroot-libcxx; cmake \
-	-DCMAKE_BUILD_TYPE=Release \
-	-DCMAKE_INSTALL_PREFIX=$PWD/sysroot \
-	-DCMAKE_C_COMPILER=clang \
-	-DCMAKE_C_FLAGS=--sysroot=$PWD/sysroot \
-	-DCMAKE_CXX_COMPILER=clang++ \
-	-DCMAKE_SHARED_LINKER_FLAGS=\"-L$PWD/sysroot/lib -L$PWD/build-sysroot-libcxxabi/lib\" \
-	-DLIBCXX_CXX_ABI=libcxxabi \
-	-DLIBCXX_CXX_ABI_INCLUDE_PATHS=$PWD/src/$LIBCXXABI/include \
-	-DLIBCXX_HAS_MUSL_LIBC=True \
-	-DLIBCXX_HAS_GCC_S_LIB=False \
-	$PWD/src/$LIBCXX"
-exit
-  make -j8 -C build-sysroot-libcxx cxx install-cxx
-}
-
-
-host() {
+host_clang() {
   init
   
   mkdir build-host-clang
   sh -c "cd build-host-clang; cmake -GNinja \
 	-DCMAKE_BUILD_TYPE=Release \
 	-DCMAKE_INSTALL_PREFIX=$PWD/host \
-	-DCMAKE_C_COMPILER=clang \
-	-DCMAKE_CXX_COMPILER=clang++ \
 	-DDEFAULT_SYSROOT=$PWD/sysroot \
+	-DC_INCLUDE_DIRS=/include \
 	-DCLANG_DEFAULT_CXX_STDLIB=libc++ \
 	-DCLANG_DEFAULT_LINKER=lld \
 	-DCLANG_DEFAULT_RTLIB=compiler-rt \
 	-DLLVM_DEFAULT_TARGET_TRIPLE=$TARGET \
-	-DLLVM_ENABLE_LLD=True \
 	$PWD/src/$LLVM"
+}
+
+
+sysroot() {
+  init 
+
+  export PATH=$PATH:$PWD/host/bin
+
+  mkdir build-sysroot-libunwind
+  sh -c "cd build-sysroot-libunwind; cmake \
+	-DCMAKE_BUILD_TYPE=Release \
+	-DCMAKE_INSTALL_PREFIX=$PWD/sysroot/usr \
+	-DCMAKE_SYSTEM_NAME=Linux \
+	-DCMAKE_C_COMPILER=x86_64-linux-musl-gcc \
+	-DCMAKE_CXX_COMPILER=x86_64-linux-musl-g++ \
+	-DLIBUNWIND_USE_COMPILER_RT=True \
+	$PWD/src/$LIBUNWIND"
+
+  make -j8 -C build-sysroot-libunwind unwind install-unwind
+
+  mkdir build-sysroot-libcxxabi
+  sh -c "cd build-sysroot-libcxxabi; cmake \
+	-DCMAKE_BUILD_TYPE=Release \
+	-DCMAKE_INSTALL_PREFIX=$PWD/sysroot/usr \
+	-DCMAKE_SYSTEM_NAME=Linux \
+	-DCMAKE_C_COMPILER=x86_64-linux-musl-gcc \
+	-DCMAKE_CXX_COMPILER=x86_64-linux-musl-g++ \
+	-DCMAKE_SHARED_LINKER_FLAGS=-L$PWD/sysroot/lib \
+	-DLIBCXXABI_USE_COMPILER_RT=True \
+	-DLIBCXXABI_USE_LLVM_UNWINDER=True \
+	-DLIBCXXABI_LIBUNWIND_PATH=$PWD/src/$LIBUNWIND \
+	-DLIBCXXABI_LIBCXX_INCLUDES=$PWD/src/$LIBCXX/include \
+	$PWD/src/$LIBCXXABI"
+
+  make -j8 -C build-sysroot-libcxxabi cxxabi install-cxxabi
+
+  mkdir build-sysroot-libcxx
+  sh -c "cd build-sysroot-libcxx; cmake \
+	-DCMAKE_BUILD_TYPE=Release \
+	-DCMAKE_INSTALL_PREFIX=$PWD/sysroot/usr \
+	-DCMAKE_SYSTEM_NAME=Linux \
+	-DCMAKE_C_COMPILER=x86_64-linux-musl-gcc \
+	-DCMAKE_CXX_COMPILER=x86_64-linux-musl-g++ \
+	-DCMAKE_SHARED_LINKER_FLAGS=-L$PWD/sysroot/lib \
+	-DLIBCXXABI_USE_LLVM_UNWINDER=True \
+	-DLIBCXX_USE_COMPILER_RT=True \
+	-DLIBCXX_CXX_ABI=libcxxabi \
+	-DLIBCXX_CXX_ABI_INCLUDE_PATHS=$PWD/src/$LIBCXXABI/include \
+	-DLIBCXX_HAS_MUSL_LIBC=True \
+	-DLIBCXX_HAS_GCC_S_LIB=False \
+	$PWD/src/$LIBCXX"
+
+  make -j8 -C build-sysroot-libcxx cxx install-cxx
+
+  mkdir -p build-sysroot-musl
+  sh -c "cd build-sysroot-musl; \
+	CC=clang \
+	$PWD/src/$MUSL/configure \
+	--prefix=/usr"
+  make -j8 -C build-sysroot-musl
+  DESTDIR=$PWD/sysroot make -C build-sysroot-musl install 
 }
 
 
