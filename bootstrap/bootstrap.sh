@@ -92,13 +92,6 @@ init() {
 }
 
 
-host_gcc() {
-  init 
-
-  make -j12 -C $PWD/src/musl-cross-make
-  make -C $PWD/src/musl-cross-make install
-}
-
 stage_clang() {
   init
   
@@ -133,8 +126,12 @@ stage_clang() {
   make -j8 -C build-stage-libcxx clang install-clang
 }
 
-host_clang() {
-  init
+
+host() {
+  init 
+
+  make -j12 -C $PWD/src/musl-cross-make
+  make -C $PWD/src/musl-cross-make install
 
   export PATH=$PWD/host_gcc/bin:$PATH
 
@@ -195,16 +192,9 @@ host_clang() {
 	-DCLANG_TABLEGEN=$PWD/build-host-clang/bin/clang-tblgen \
 	$PWD/src/$LLVM"
 
-  make -j12 -C build-host-clang llvm-tblgen clang-tblgen
- 
-  exit
-
+  make -j8 -C build-host-clang llvm-tblgen clang-tblgen 
   make -j8 -C build-host-clang install-compiler-rt
-  make -j8 -C build-host-clang install-unwind
-  make -j8 -C build-host-clang install-cxxabi
-  make -j8 -C build-host-clang install-cxx
-  make -j8 -C build-host-clang install-lld
-  make -j8 -C build-host-clang install-clang
+  make -j8 -C build-host-clang install
 }
 
 
