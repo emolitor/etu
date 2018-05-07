@@ -51,7 +51,7 @@ init() {
 
     sh -c "cd src; curl -L -O $MUSL_URL/$MUSL_FILE"
 #    sh -c "cd src; curl -L -O $LIBICU_URL/$LIBICU_FILE"
-#    sh -c "cd src; curl -L -O $LIBXML2_URL/$LIBXML2_FILE"
+    sh -c "cd src; curl -L -O $LIBXML2_URL/$LIBXML2_FILE"
     sh -c "cd src; curl -L -O $LLVM_URL/$LLVM_FILE"
     sh -c "cd src; curl -L -O $LLVM_URL/$LIBUNWIND_FILE"
     sh -c "cd src; curl -L -O $LLVM_URL/$LIBCXXABI_FILE"
@@ -65,7 +65,7 @@ init() {
 #    mkdir -p src/$LIBICU
 #    bsdtar -xf src/$LIBICU_FILE -C src/$LIBICU --strip 1
 
-#    sh -c "cd src; bsdtar -xf $LIBXML2_FILE"
+    sh -c "cd src; bsdtar -xf $LIBXML2_FILE"
 
     #mkdir -p src/$LIBUNWIND
     #bsdtar -xf src/$LIBUNWIND_FILE -C src/$LIBUNWIND --strip 1
@@ -147,6 +147,19 @@ host_clang() {
   make -j8 -C build-host-musl
   make -C build-host-musl install 
 
+
+  mkdir -p build-host-libxml2
+  sh -c "cd build-host-libxml2; \
+	CFLAGS=-Wl,-dynamic-linker,$PWD/host_clang/lib/ld-musl-x86_64.so.1 \
+	$PWD/src/$LIBXML2/configure \
+	--host=$TARGET \
+	--without-zlib \
+	--without-lzma \
+	--without-python \
+	--prefix=$PWD/host_clang"
+  make -j8 -C build-host-libxml2
+  make -C build-host-libxml2 install
+
   mkdir build-host-clang
   sh -c "cd build-host-clang; cmake \
 	-DCMAKE_BUILD_TYPE=Release \
@@ -155,7 +168,11 @@ host_clang() {
 	-DCMAKE_INSTALL_PREFIX=$PWD/host_clang \
 	-DCMAKE_C_COMPILER=$TARGET-gcc \
 	-DCMAKE_CXX_COMPILER=$TARGET-g++ \
+	-DCMAKE_EXE_LINKER_FLAGS=\"-static-libgcc -static-libstdc++ \
+	   -Wl,-dynamic-linker,$PWD/host_clang/lib/ld-musl-x86_64.so.1 \" \
 	-DCMAKE_SHARED_LINKER_FLAGS=-L$PWD/build-host-clang/lib \
+	-DLIBXML2_INCLUDE_DIR=$PWD/host_clang/include/libxml2c \
+	-DLIBXML2_LIBRARY=$PWD/host_clang/lib/libxml2.so \
 	-DCOMPILER_RT_BUILD_SANITIZERS=False \
 	-DCOMPILER_RT_BUILD_XRAY=False \
 	-DCOMPILER_RT_BUILD_LIBFUZZER=False \
