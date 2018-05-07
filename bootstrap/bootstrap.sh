@@ -129,6 +129,13 @@ host_clang() {
 sysroot() {
   init 
 
+  mkdir -p build-sysroot-musl
+  sh -c "cd build-sysroot-musl; \
+	$PWD/src/$MUSL/configure \
+	--prefix=/usr"
+  make -j8 -C build-sysroot-musl
+  DESTDIR=$PWD/sysroot make -C build-sysroot-musl install 
+
   export PATH=$PATH:$PWD/host/bin
 
   mkdir build-sysroot-libcxx
@@ -155,14 +162,6 @@ sysroot() {
   make -j8 -C build-sysroot-libcxx unwind install-unwind
   make -j8 -C build-sysroot-libcxx cxxabi install-cxxabi
   make -j8 -C build-sysroot-libcxx cxx install-cxx
-
-  mkdir -p build-sysroot-musl
-  sh -c "cd build-sysroot-musl; \
-	CC=clang \
-	$PWD/src/$MUSL/configure \
-	--prefix=/usr"
-  make -j8 -C build-sysroot-musl
-  DESTDIR=$PWD/sysroot make -C build-sysroot-musl install 
 }
 
 sysroot_old() {
