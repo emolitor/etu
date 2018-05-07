@@ -45,7 +45,7 @@ init() {
 
     sh -c "cd src; git clone https://github.com/richfelker/musl-cross-make"
     echo "TARGET=x86_64-linux-musl" > $PWD/src/musl-cross-make/config.mak
-    echo "OUTPUT=$PWD/host" >> $PWD/src/musl-cross-make/config.mak
+    echo "OUTPUT=$PWD/host_gcc" >> $PWD/src/musl-cross-make/config.mak
     echo "DL_CMD=curl -C - -L -o" >> $PWD/src/musl-cross-make/config.mak
     echo "COMMON_CONFIG+=CFLAGS=\"-Os\" CXXFLAGS=\"-Os\" LDFLAGS=\"-s\"" >> $PWD/src/musl-cross-make/config.mak
 
@@ -99,17 +99,18 @@ host_gcc() {
   make -C $PWD/src/musl-cross-make install
 }
 
-host_clang() {
+stage_clang() {
   init
   
   mkdir build-host-clang
-  sh -c "cd build-host-clang; cmake -GNinja \
+  sh -c "cd build-stage-clang; cmake -GNinja \
 	-DCMAKE_BUILD_TYPE=Release \
-	-DCMAKE_SHARED_LINKER_FLAGS=-L$PWD/build-host-clang/lib \
-	-DCMAKE_INSTALL_PREFIX=$PWD/host \
+	-DCMAKE_INSTALL_PREFIX=$PWD/stage \
+	-DCMAKE_SHARED_LINKER_FLAGS=-L$PWD/build-stage-clang/lib \
 	-DCOMPILER_RT_BUILD_SANITIZERS=False \
 	-DCOMPILER_RT_BUILD_XRAY=False \
 	-DCOMPILER_RT_BUILD_LIBFUZZER=False \
+	-DLIBCXXABI_ENABLE_STATIC_UNWINDER=True \
 	-DLIBCXXABI_USE_LLVM_UNWINDER=True \
 	-DLIBCXX_CXX_ABI=libcxxabi \
 	-DLIBCXX_CXX_ABI_INCLUDE_PATHS=$PWD/src/$LLVM/projects/libcxxabi/include \
@@ -124,13 +125,65 @@ host_clang() {
 
   exit
 
-  make -j8 -C build-sysroot-libcxx compiler-rt install-compiler-rt
-  make -j8 -C build-sysroot-libcxx unwind install-unwind
-  make -j8 -C build-sysroot-libcxx cxxabi install-cxxabi
-  make -j8 -C build-sysroot-libcxx cxx install-cxx
-  make -j8 -C build-sysroot-libcxx lld install-lld
-  make -j8 -C build-sysroot-libcxx clang install-clang
+  make -j8 -C build-stage-libcxx compiler-rt install-compiler-rt
+  make -j8 -C build-stage-libcxx unwind install-unwind
+  make -j8 -C build-stage-libcxx cxxabi install-cxxabi
+  make -j8 -C build-stage-libcxx cxx install-cxx
+  make -j8 -C build-stage-libcxx lld install-lld
+  make -j8 -C build-stage-libcxx clang install-clang
 }
+
+host_clang() {
+  init
+
+  export PATH=$PWD/host_gcc/bin:$PATH
+
+  mkdir -p build-host-musl
+  sh -c "cd build-host-musl; \
+	CC=$TARGET-gcc \
+	$PWD/src/$MUSL/configure \
+	--syslibdir=$PWD/host_clang/lib \
+	--prefix=$PWD/host_clang"
+  make -j8 -C build-host-musl
+  make -C build-host-musl install 
+
+  mkdir build-host-clang
+  sh -c "cd build-host-clang; cmake \
+	-DCMAKE_BUILD_TYPE=Release \
+	-DCMAKE_CROSSCOMPILING=True \
+	-DCMAKE_SYSTEM_NAME=Linux \
+	-DCMAKE_INSTALL_PREFIX=$PWD/host_clang \
+	-DCMAKE_C_COMPILER=$TARGET-gcc \
+	-DCMAKE_CXX_COMPILER=$TARGET-g++ \
+	-DCMAKE_SHARED_LINKER_FLAGS=-L$PWD/build-host-clang/lib \
+	-DCOMPILER_RT_BUILD_SANITIZERS=False \
+	-DCOMPILER_RT_BUILD_XRAY=False \
+	-DCOMPILER_RT_BUILD_LIBFUZZER=False \
+	-DLIBCXXABI_USE_LLVM_UNWINDER=True \
+	-DLIBCXX_CXX_ABI=libcxxabi \
+	-DLIBCXX_CXX_ABI_INCLUDE_PATHS=$PWD/src/$LLVM/projects/libcxxabi/include \
+	-DLIBCXX_HAS_MUSL_LIBC=True \
+	-DLIBCXX_HAS_GCC_S_LIB=False \
+	-DLLVM_DEFAULT_TARGET_TRIPLE=$TARGET \
+	-DLLVM_ENABLE_EH=True \
+	-DLLVM_ENABLE_RTTI=True \
+	-DLLVM_ENABLE_LIBCXX=True \
+	-DCLANG_BUILD_EXAMPLES=False \
+	-DCLANG_DEFAULT_CXX_STDLIB=libc++ \
+	-DCLANG_DEFAULT_LINKER=lld \
+	-DCLANG_DEFAULT_RTLIB=compiler-rt \
+	$PWD/src/$LLVM"
+ 
+  exit
+
+  make -j8 -C build-host-clang install-compiler-rt
+  make -j8 -C build-host-clang install-unwind
+  make -j8 -C build-host-clang install-cxxabi
+  make -j8 -C build-host-clang install-cxx
+  make -j8 -C build-host-clang install-lld
+  make -j8 -C build-host-clang install-clang
+}
+
 
 
 host_clang_old() {
@@ -162,37 +215,57 @@ host_clang_old() {
 sysroot() {
   init 
 
+  export PATH=$PWD/host/bin:$PATH
+
   mkdir -p build-sysroot-musl
   sh -c "cd build-sysroot-musl; \
+	CC=$PWD/host/bin/clang \
 	$PWD/src/$MUSL/configure \
 	--prefix=/usr"
   make -j8 -C build-sysroot-musl
   DESTDIR=$PWD/sysroot make -C build-sysroot-musl install 
 
+  touch $PWD/sysroot/lib/crtbeginS.o
+  touch $PWD/sysroot/lib/crtendS.o
+
   mkdir build-sysroot-libcxx
   sh -c "cd build-sysroot-libcxx; cmake \
 	-DCMAKE_BUILD_TYPE=Release \
+	-DCMAKE_CROSSCOMPILING=True \
 	-DCMAKE_INSTALL_PREFIX=$PWD/sysroot/usr \
-	-DCMAKE_SYSTEM_NAME=Linux \
 	-DCMAKE_C_COMPILER=$PWD/host/bin/clang \
+	-DCMAKE_C_FLAGS=-rtlib=compiler-rt \
+	-DCMAKE_C_COMPILER_TARGET=$TARGET \
 	-DCMAKE_CXX_COMPILER=$PWD/host/bin/clang++ \
+	-DCMAKE_CXX_COMPILER_TARGET=$TARGET \
+	-DCMAKE_EXE_LINKER_FLAGS=-L$PWD/host/lib \
 	-DCMAKE_SHARED_LINKER_FLAGS=-L$PWD/build-sysroot-libcxx/lib \
+	-DCMAKE_SYSROOT=$PWD/sysroot \
 	-DCOMPILER_RT_BUILD_SANITIZERS=False \
 	-DCOMPILER_RT_BUILD_XRAY=False \
 	-DCOMPILER_RT_BUILD_LIBFUZZER=False \
+	-DLIBUNWIND_USE_COMPILER_RT=True \
 	-DLIBCXXABI_USE_LLVM_UNWINDER=True \
+	-DLIBCXXABI_USE_COMPILER_RT=True \
+	-DLIBCXXABI_HAS_CXA_THREAD_ATEXIT_IMPL=False \
 	-DLIBCXX_CXX_ABI=libcxxabi \
 	-DLIBCXX_CXX_ABI_INCLUDE_PATHS=$PWD/src/$LLVM/projects/libcxxabi/include \
+	-DLIBCXX_USE_COMPILER_RT=True \
 	-DLIBCXX_HAS_MUSL_LIBC=True \
 	-DLIBCXX_HAS_GCC_S_LIB=False \
 	-DLLVM_ENABLE_EH=True \
 	-DLLVM_ENABLE_RTTI=True \
+	-DLLVM_ENABLE_LIBCXX=True \
+	-DLLVM_ENABLE_LLD=True \
 	$PWD/src/$LLVM"
 
-  make -j8 -C build-sysroot-libcxx compiler-rt install-compiler-rt
-  make -j8 -C build-sysroot-libcxx unwind install-unwind
-  make -j8 -C build-sysroot-libcxx cxxabi install-cxxabi
-  make -j8 -C build-sysroot-libcxx cxx install-cxx
+  make -j8 -C build-sysroot-libcxx install-compiler-rt
+  make -j8 -C build-sysroot-libcxx install-unwind
+  make -j8 -C build-sysroot-libcxx install-cxxabi
+  make -j8 -C build-sysroot-libcxx install-cxx
+
+  rm $PWD/sysroot/lib/crtbeginS.o
+  rm $PWD/sysroot/lib/crtendS.o
 }
 
 sysroot_old() {
