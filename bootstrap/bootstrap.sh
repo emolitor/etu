@@ -169,8 +169,10 @@ host_clang() {
 	-DCMAKE_C_COMPILER=$TARGET-gcc \
 	-DCMAKE_CXX_COMPILER=$TARGET-g++ \
 	-DCMAKE_EXE_LINKER_FLAGS=\"-static-libgcc -static-libstdc++ \
+	   -L$PWD/host_clang/lib \
 	   -Wl,-dynamic-linker,$PWD/host_clang/lib/ld-musl-x86_64.so.1 \" \
-	-DCMAKE_SHARED_LINKER_FLAGS=-L$PWD/build-host-clang/lib \
+	-DCMAKE_SHARED_LINKER_FLAGS=\" -L$PWD/build-host-clang/lib \
+	   -L$PWD/host_clang/lib \" \
 	-DLIBXML2_INCLUDE_DIR=$PWD/host_clang/include/libxml2 \
 	-DLIBXML2_LIBRARY=$PWD/host_clang/lib/libxml2.so \
 	-DCOMPILER_RT_BUILD_SANITIZERS=False \
