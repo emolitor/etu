@@ -185,11 +185,15 @@ host_clang() {
 	-DLLVM_ENABLE_EH=True \
 	-DLLVM_ENABLE_RTTI=True \
 	-DLLVM_ENABLE_LIBCXX=True \
+	-DLLVM_TABLEGEN=$PWD/build-host-clang/bin/llvm-tblgen \
 	-DCLANG_BUILD_EXAMPLES=False \
 	-DCLANG_DEFAULT_CXX_STDLIB=libc++ \
 	-DCLANG_DEFAULT_LINKER=lld \
 	-DCLANG_DEFAULT_RTLIB=compiler-rt \
+	-DCLANG_TABLEGEN=$PWD/build-host-clang/bin/clang-tblgen \
 	$PWD/src/$LLVM"
+
+  make -j12 -C build-host-clang llvm-tblgen clang-tblgen
  
   exit
 
