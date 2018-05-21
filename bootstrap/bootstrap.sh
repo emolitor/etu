@@ -8,6 +8,8 @@ LLVM_VERSION=6.0.0
 # You shouldn't have to change anything below here
 TARGET=x86_64-linux-musl
 
+TAR=`which tar`
+
 MUSL=musl-$MUSL_VERSION
 MUSL_FILE=$MUSL.tar.gz
 MUSL_URL=https://www.musl-libc.org/releases/
@@ -60,34 +62,34 @@ init() {
     sh -c "cd src; curl -L -O $LLVM_URL/$CFE_FILE"
     sh -c "cd src; curl -L -O $LLVM_URL/$LLD_FILE"
 
-    sh -c "cd src; bsdtar -xf $MUSL_FILE"
+    sh -c "cd src; $TAR -xf $MUSL_FILE"
 
 #    mkdir -p src/$LIBICU
-#    bsdtar -xf src/$LIBICU_FILE -C src/$LIBICU --strip 1
+#    $TAR -xf src/$LIBICU_FILE -C src/$LIBICU --strip 1
 
-    sh -c "cd src; bsdtar -xf $LIBXML2_FILE"
+    sh -c "cd src; $TAR -xf $LIBXML2_FILE"
 
     #mkdir -p src/$LIBUNWIND
-    #bsdtar -xf src/$LIBUNWIND_FILE -C src/$LIBUNWIND --strip 1
+    #$TAR -xf src/$LIBUNWIND_FILE -C src/$LIBUNWIND --strip 1
     #mkdir -p src/$LIBCXXABI
-    #bsdtar -xf src/$LIBCXXABI_FILE -C src/$LIBCXXABI --strip 1
+    #$TAR -xf src/$LIBCXXABI_FILE -C src/$LIBCXXABI --strip 1
     #mkdir -p src/$LIBCXX
-    #bsdtar -xf src/$LIBCXX_FILE -C src/$LIBCXX --strip 1
+    #$TAR -xf src/$LIBCXX_FILE -C src/$LIBCXX --strip 1
 
     mkdir -p src/$LLVM
-    bsdtar -xf src/$LLVM_FILE -C src/$LLVM --strip 1
+    $TAR -xf src/$LLVM_FILE -C src/$LLVM --strip 1
     mkdir -p src/$LLVM/projects/libunwind
-    bsdtar -xf src/$LIBUNWIND_FILE -C src/$LLVM/projects/libunwind --strip 1
+    $TAR -xf src/$LIBUNWIND_FILE -C src/$LLVM/projects/libunwind --strip 1
     mkdir -p src/$LLVM/projects/libcxxabi
-    bsdtar -xf src/$LIBCXXABI_FILE -C src/$LLVM/projects/libcxxabi --strip 1
+    $TAR -xf src/$LIBCXXABI_FILE -C src/$LLVM/projects/libcxxabi --strip 1
     mkdir -p src/$LLVM/projects/libcxx
-    bsdtar -xf src/$LIBCXX_FILE -C src/$LLVM/projects/libcxx --strip 1
+    $TAR -xf src/$LIBCXX_FILE -C src/$LLVM/projects/libcxx --strip 1
     mkdir -p src/$LLVM/projects/compiler-rt
-    bsdtar -xf src/$COMPILER_RT_FILE -C src/$LLVM/projects/compiler-rt --strip 1
+    $TAR -xf src/$COMPILER_RT_FILE -C src/$LLVM/projects/compiler-rt --strip 1
     mkdir -p src/$LLVM/tools/clang
-    bsdtar -xf src/$CFE_FILE -C src/$LLVM/tools/clang --strip 1
+    $TAR -xf src/$CFE_FILE -C src/$LLVM/tools/clang --strip 1
     mkdir -p src/$LLVM/tools/lld
-    bsdtar -xf src/$LLD_FILE -C src/$LLVM/tools/lld --strip 1
+    $TAR -xf src/$LLD_FILE -C src/$LLVM/tools/lld --strip 1
   fi
 }
 
