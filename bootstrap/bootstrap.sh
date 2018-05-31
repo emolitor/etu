@@ -98,7 +98,7 @@ stage_clang() {
   init
   
   mkdir build-stage-clang
-  sh -c "cd build-stage-clang; cmake -GNinja \
+  sh -c "cd build-stage-clang; cmake \
 	-DCMAKE_BUILD_TYPE=Release \
 	-DCMAKE_INSTALL_PREFIX=$PWD/stage \
 	-DCMAKE_SHARED_LINKER_FLAGS=-L$PWD/build-stage-clang/lib \
@@ -119,14 +119,8 @@ stage_clang() {
 	-DDEFAULT_SYSROOT=$PWD/sysroot \
 	$PWD/src/$LLVM"
 
-  exit
-
-  make -j8 -C build-stage-libcxx compiler-rt install-compiler-rt
-  make -j8 -C build-stage-libcxx unwind install-unwind
-  make -j8 -C build-stage-libcxx cxxabi install-cxxabi
-  make -j8 -C build-stage-libcxx cxx install-cxx
-  make -j8 -C build-stage-libcxx lld install-lld
-  make -j8 -C build-stage-libcxx clang install-clang
+  make -j8 -C build-stage-clang
+  make -j8 -C build-stage-clang install
 }
 
 
