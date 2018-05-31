@@ -97,7 +97,7 @@ init() {
 stage_clang() {
   init
   
-  mkdir build-host-clang
+  mkdir build-stage-clang
   sh -c "cd build-stage-clang; cmake -GNinja \
 	-DCMAKE_BUILD_TYPE=Release \
 	-DCMAKE_INSTALL_PREFIX=$PWD/stage \
@@ -116,6 +116,7 @@ stage_clang() {
 	-DCLANG_DEFAULT_CXX_STDLIB=libc++ \
 	-DCLANG_DEFAULT_LINKER=lld \
 	-DCLANG_DEFAULT_RTLIB=compiler-rt \
+	-DDEFAULT_SYSROOT=$PWD/sysroot \
 	$PWD/src/$LLVM"
 
   exit
