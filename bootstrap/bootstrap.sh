@@ -46,12 +46,6 @@ init() {
   if [ ! -d $PWD/src ]; then
     mkdir -p $PWD/src
 
-    sh -c "cd src; git clone https://github.com/richfelker/musl-cross-make"
-    echo "TARGET=x86_64-linux-musl" > $PWD/src/musl-cross-make/config.mak
-    echo "OUTPUT=$PWD/host_gcc" >> $PWD/src/musl-cross-make/config.mak
-    echo "DL_CMD=curl -C - -L -o" >> $PWD/src/musl-cross-make/config.mak
-    echo "COMMON_CONFIG+=CFLAGS=\"-Os\" CXXFLAGS=\"-Os\" LDFLAGS=\"-s\"" >> $PWD/src/musl-cross-make/config.mak
-
     sh -c "cd src; curl -L -O $MUSL_URL/$MUSL_FILE"
 #    sh -c "cd src; curl -L -O $LIBICU_URL/$LIBICU_FILE"
     sh -c "cd src; curl -L -O $LIBXML2_URL/$LIBXML2_FILE"
@@ -69,13 +63,6 @@ init() {
 #    $TAR -xf src/$LIBICU_FILE -C src/$LIBICU --strip 1
 
     sh -c "cd src; $TAR -xf $LIBXML2_FILE"
-
-    #mkdir -p src/$LIBUNWIND
-    #$TAR -xf src/$LIBUNWIND_FILE -C src/$LIBUNWIND --strip 1
-    #mkdir -p src/$LIBCXXABI
-    #$TAR -xf src/$LIBCXXABI_FILE -C src/$LIBCXXABI --strip 1
-    #mkdir -p src/$LIBCXX
-    #$TAR -xf src/$LIBCXX_FILE -C src/$LIBCXX --strip 1
 
     mkdir -p src/$LLVM
     $TAR -xf src/$LLVM_FILE -C src/$LLVM --strip 1
@@ -99,13 +86,13 @@ host() {
   init 
 
   mkdir build-host-clang
-  sh -c "cd build-host-clang; cmake \
+  sh -c "cd build-host-clang; cmake -G Ninja \
 	-DCMAKE_BUILD_TYPE=Release \
 	-DCMAKE_INSTALL_PREFIX=$PWD/host \
 	$PWD/src/$LLVM"
 
-  make -j8 -C build-host-clang 
-  make -j8 -C build-host-clang install
+  ninja -C build-host-clang 
+  ninja -C build-host-clang install
 }
 
 
