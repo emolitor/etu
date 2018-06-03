@@ -11,10 +11,13 @@ HOST=`uname -s`
 
 TAR=`which tar`
 
+BMAKE=bmake
+BMAKE_FILE=$BMAKE.tar.gz
+BMAKE_URL='http://www.crufty.net/ftp/pub/sjg'
+
 MUSL=musl-$MUSL_VERSION
 MUSL_FILE=$MUSL.tar.gz
 MUSL_URL=https://www.musl-libc.org/releases/
-
 
 LIBICU=icu4c-`echo $LIBICU_VERSION | sed 's/\./_/'`
 LIBICU_FILE=$LIBICU-src.tgz
@@ -46,6 +49,7 @@ init() {
   if [ ! -d $PWD/src ]; then
     mkdir -p $PWD/src
 
+    sh -c "cd src; curl -L -O $BMAKE_URL/$BMAKE_FILE"
     sh -c "cd src; curl -L -O $MUSL_URL/$MUSL_FILE"
 #    sh -c "cd src; curl -L -O $LIBICU_URL/$LIBICU_FILE"
     sh -c "cd src; curl -L -O $LIBXML2_URL/$LIBXML2_FILE"
@@ -56,6 +60,8 @@ init() {
     sh -c "cd src; curl -L -O $LLVM_URL/$COMPILER_RT_FILE"
     sh -c "cd src; curl -L -O $LLVM_URL/$CFE_FILE"
     sh -c "cd src; curl -L -O $LLVM_URL/$LLD_FILE"
+
+    sh -c "cd src; $TAR -xf $BMAKE_FILE"
 
     sh -c "cd src; $TAR -xf $MUSL_FILE"
 
@@ -93,6 +99,15 @@ host() {
 
   ninja -C build-host-clang 
   ninja -C build-host-clang install
+
+  mkdir build-host-bmake
+  sh -c "cd build-host-bmake; \
+         CC=$PWD/host/bin/clang \
+         $PWD/src/bmake/configure --prefix=$PWD/host"
+  sh -c "cd build-host-bmake; \
+         sh make-bootstrap.sh"
+  sh -c "cd build-host-bmake; \
+         ./bmake -m $PWD/src/bmake/mk install"
 }
 
 
