@@ -5,6 +5,8 @@ LIBICU_VERSION=61.1
 LIBXML2_VERSION=2.9.8
 LLVM_VERSION=6.0.0
 
+ETU_CSU_REPO="https://github.com/emolitor/etu-csu"
+
 # You shouldn't have to change anything below here
 TARGET=x86_64-linux-musl
 HOST=`uname -s`
@@ -48,6 +50,8 @@ init() {
 
   if [ ! -d $PWD/src ]; then
     mkdir -p $PWD/src
+
+    sh -c "cd src; git clone $ETU_CSU_REPO"
 
     sh -c "cd src; curl -L -O $BMAKE_URL/$BMAKE_FILE"
     sh -c "cd src; curl -L -O $MUSL_URL/$MUSL_FILE"
@@ -131,6 +135,12 @@ sysroot() {
 	--prefix=/"
   make -j8 -C build-sysroot-musl 
   DESTDIR=$PWD/sysroot make -C build-sysroot-musl install 
+
+  sh -c "cd src/etu-csu; BMAKE=$PWD/host/bin/bmake \
+	./build.sh -m $PWD/host/share/mk"
+  mv $PWD/src/etu-csu/output/x86_64/* $PWD/sysroot/lib
+  sh -c "cd $PWD/sysroot/lib; ln -s crtbegin.o crtbeginT.o"
+  sh -c "cd $PWD/sysroot/lib; ln -s crtend.o crtendS.o"
 }
 
 
