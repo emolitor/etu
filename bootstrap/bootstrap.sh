@@ -95,6 +95,10 @@ host() {
   sh -c "cd build-host-clang; cmake -G Ninja \
 	-DCMAKE_BUILD_TYPE=Release \
 	-DCMAKE_INSTALL_PREFIX=$PWD/host \
+	-DLIBCXX_HAS_MUSL_LIBC=False \
+	-DCOMPILER_RT_BUILD_LIBFUZZER=False \
+	-DCOMPILER_RT_BUILD_SANITIZERS=False \
+	-DCOMPILER_RT_BUILD_XRAY=False \
 	$PWD/src/$LLVM"
 
   ninja -C build-host-clang 
